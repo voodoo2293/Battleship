@@ -18,6 +18,14 @@
 - Docker Compose
 - pytest
 
+## Настройка окружения
+
+Перед запуском создайте файл `.env` на основе `.env.example` и укажите параметры PostgreSQL.
+
+```
+Copy-Item .env.example .env
+```
+
 ## Запуск
 
 Для запуска проекта:
