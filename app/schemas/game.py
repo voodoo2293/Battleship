@@ -5,5 +5,5 @@ class ShipResponse(BaseModel):
     coordinates: list[str]
 
 class GameCreateResponse(BaseModel):
-    session_id: UUID
+    game_id: UUID
     ships: list[ShipResponse]
