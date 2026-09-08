@@ -28,3 +28,11 @@ def is_inside_board(position: tuple[int, int]) -> bool:
         0 <= x < len(BOARD_COLUMNS)
         and 0 <= y < BOARD_SIZE
     )
+
+def format_coordinate(position: tuple[int, int]) -> str:
+    x, y = position
+
+    if not is_inside_board(position):
+        raise ValueError("Position outside board")
+
+    return f"{BOARD_COLUMNS[x]}{y + 1}"
