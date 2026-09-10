@@ -1,3 +1,4 @@
+from app.domain.fleet.validator import is_valid_fleet
 from app.db.session import SessionLocal
 from app.models.game import Game
 
@@ -8,11 +9,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 client = TestClient(app)
 
-def delete_game(game_id):
+def delete_game(session_id):
     db = SessionLocal()
 
     try:
-        game = db.get(Game, UUID(game_id))
+        game = db.get(Game, UUID(session_id))
 
         if game is not None:
             db.delete(game)
@@ -21,43 +22,80 @@ def delete_game(game_id):
         db.close()
 
 def test_create_game_returns_201():
-    response = client.post("/games")
+    response = client.post("/game")
     data = response.json()
 
     try:
         assert response.status_code == 201
     finally:
-        if "game_id" in data:
-            delete_game(data["game_id"])
+        if "session_id" in data:
+            delete_game(data["session_id"])
 
 def test_create_game_returns_expected_body():
-    response = client.post("/games")
+    response = client.post("/game")
     data = response.json()
 
     try: 
-        assert "game_id" in data
+        assert "session_id" in data
         assert "ships" in data
     finally:
-        if "game_id" in data:
-            delete_game(data["game_id"])
+        if "session_id" in data:
+            delete_game(data["session_id"])
 
 def test_create_game_returns_valid_uuid():
-    response = client.post("/games")
+    response = client.post("/game")
     data = response.json()
 
     try:
-        UUID(data["game_id"])
+        UUID(data["session_id"])
     finally:
-        if "game_id" in data:
-            delete_game(data["game_id"])
+        if "session_id" in data:
+            delete_game(data["session_id"])
 
 def test_create_game_returns_ships_list():
-    response = client.post("/games")
+    response = client.post("/game")
     data = response.json()
 
     try:
         assert isinstance(data["ships"], list)
         assert len(data["ships"]) > 0
     finally:
-        if "game_id" in data:
-            delete_game(data["game_id"])
+        if "session_id" in data:
+            delete_game(data["session_id"])
+
+def test_create_game_returns_valid_fleet():
+    response = client.post("/game")
+    data = response.json()
+
+    try:
+        fleet = [
+            ship["coordinates"]
+            for ship in data["ships"]
+        ]
+
+        assert len(fleet) == 10
+        assert sum(len(ship) for ship in fleet) == 20
+        assert is_valid_fleet(fleet) is True
+    finally:
+        if "session_id" in data:
+            delete_game(data["session_id"])
+
+def test_create_game_persists_response_in_database():
+    response = client.post("/game")
+    data = response.json()
+
+    try:
+        db = SessionLocal()
+
+        try:
+            saved_game = db.get(Game, UUID(data["session_id"]))
+
+            assert saved_game is not None
+            assert saved_game.status == "active"
+            assert saved_game.ships == data["ships"]
+        finally:
+            db.close()
+
+    finally:
+        if "session_id" in data:
+            delete_game(data["session_id"])
