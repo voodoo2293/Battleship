@@ -8,7 +8,7 @@ def parse_coordinate(coordinate: str) -> tuple[int, int]:
     column = coordinate[0]
     row = coordinate[1:]
 
-    if not ("A" <= column <= "Z"):
+    if column not in BOARD_COLUMNS:
         raise ValueError("Invalid coordinate")
 
     if not row.isdigit():
@@ -18,6 +18,9 @@ def parse_coordinate(coordinate: str) -> tuple[int, int]:
         raise ValueError("Invalid coordinate")
 
     row_number = int(row)
+
+    if not 1 <= row_number <= BOARD_SIZE:
+        raise ValueError("Invalid coordinate")
 
     return ord(column) - ord("A"), row_number - 1
 
