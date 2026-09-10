@@ -1,6 +1,9 @@
-from uuid import uuid4
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
 from app.schemas.game import GameCreateResponse
+from app.services.game import create_game as create_game_service
 
 router = APIRouter(
     prefix="/games",
@@ -12,15 +15,10 @@ router = APIRouter(
     status_code=201,
     response_model=GameCreateResponse,
 )
-def create_game():
+def create_game(db: Session = Depends(get_db)):
+    game = create_game_service(db)
+
     return {
-        "session_id": str(uuid4()),
-        "ships": [
-            {
-                "coordinates": ["A1", "A2", "A3", "A4"]
-            },
-            {
-                "coordinates": ["C1", "C2", "C3"]
-            }
-        ]
+        "game_id": game.game_id,
+        "ships": game.ships,
     }
