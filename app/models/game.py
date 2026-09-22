@@ -18,6 +18,11 @@ class Game(Base):
         JSONB,
         nullable=False,
     )
+    received_shots: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
