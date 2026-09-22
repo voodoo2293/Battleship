@@ -23,11 +23,18 @@ def test_parse_coordinate_rejects_invalid_format():
 
     with pytest.raises(ValueError):
         parse_coordinate("A01")
+
+    with pytest.raises(ValueError):
+        parse_coordinate("K1")
+
+    with pytest.raises(ValueError):
+        parse_coordinate("A11") 
+
 def test_is_inside_board():
-    assert is_inside_board(parse_coordinate("A1")) is True
-    assert is_inside_board(parse_coordinate("J10")) is True
-    assert is_inside_board(parse_coordinate("K1")) is False
-    assert is_inside_board(parse_coordinate("A11")) is False
+    assert is_inside_board((0, 0)) is True
+    assert is_inside_board((9, 9)) is True
+    assert is_inside_board((10, 0)) is False
+    assert is_inside_board((0, 10)) is False
 
 def test_format_coordinate():
     assert format_coordinate((0, 0)) == "A1"

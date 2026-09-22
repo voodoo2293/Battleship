@@ -6,7 +6,7 @@ from app.schemas.game import GameCreateResponse
 from app.services.game import create_game as create_game_service
 
 router = APIRouter(
-    prefix="/games",
+    prefix="/game",
     tags=["games"],
 )
 
@@ -19,6 +19,6 @@ def create_game(db: Session = Depends(get_db)):
     game = create_game_service(db)
 
     return {
-        "game_id": game.game_id,
+        "session_id": game.session_id,
         "ships": game.ships,
     }

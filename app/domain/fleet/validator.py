@@ -32,7 +32,10 @@ def is_straight_and_continuous(ship: list[str]) -> bool:
     return False
 
 def is_ship_inside_board(ship: list[str]) -> bool:
-    positions = [parse_coordinate(coordinate) for coordinate in ship]
+    try:
+        positions = [parse_coordinate(coordinate) for coordinate in ship]
+    except ValueError:
+        return False
 
     return all(is_inside_board(position) for position in positions)
 

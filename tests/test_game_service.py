@@ -8,14 +8,14 @@ def test_create_game_persists_game_in_database():
 
     try:
         game = create_game(db)
-        game_id = game.game_id
+        session_id = game.session_id
     finally:
         db.close()
 
     db = SessionLocal()
 
     try:
-        saved_game = db.get(Game, game_id)
+        saved_game = db.get(Game, session_id)
 
         assert saved_game is not None
         assert saved_game.status == "active"
@@ -30,7 +30,7 @@ def test_create_game_persists_game_in_database():
         assert is_valid_fleet(fleet) is True
 
     finally:
-        saved_game = db.get(Game, game_id)
+        saved_game = db.get(Game, session_id)
 
         if saved_game is not None:
             db.delete(saved_game)

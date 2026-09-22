@@ -10,7 +10,7 @@ from app.db.base import Base
 class Game(Base):
     __tablename__= "games"
 
-    game_id: Mapped[uuid.UUID] = mapped_column(
+    session_id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
         default=uuid.uuid4,
     )
