@@ -8,11 +8,18 @@ from app.schemas.game import (
     GameCreateResponse,
     OpponentShotRequest,
     OpponentShotResponse,
+    ShotResponse,
+    ShotResultRequest,
+    ShotResultResponse,
 )
 from app.services.game import (
     GameClosedError,
+    NoPendingShotError,
+    ShotPendingError,
     create_game as create_game_service,
+    create_shot,
     process_opponent_shot,
+    process_shot_result,
 )
 
 router = APIRouter(
@@ -70,4 +77,80 @@ def opponent_shot(
 
     return {
         "result": result,
+    }
+
+@router.post(
+    "/{session_id}/shot",
+    response_model=ShotResponse,
+)
+def make_shot(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+):
+    try:
+        coordinate = create_shot(
+            db=db,
+            session_id=session_id,
+        )
+    except ShotPendingError:
+        raise HTTPException(
+            status_code=409,
+            detail="Previous shot result is pending",
+        )
+    except GameClosedError:
+        raise HTTPException(
+            status_code=410,
+            detail="Game session is closed",
+        )
+
+    if coordinate is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Game session not found",
+        )
+
+    return {
+        "coordinate": coordinate,
+    }
+
+@router.post(
+    "/{session_id}/shot/result",
+    response_model=ShotResultResponse,
+)
+def shot_result(
+    session_id: UUID,
+    request: ShotResultRequest,
+    db: Session = Depends(get_db),
+):
+    if request.result not in {"miss", "hit", "killed"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid shot result",
+        )
+
+    try:
+        accepted = process_shot_result(
+            db=db,
+            session_id=session_id,
+            result=request.result,
+        )
+    except NoPendingShotError:
+        raise HTTPException(
+            status_code=409,
+            detail="No pending shot",
+        )
+    except GameClosedError:
+        raise HTTPException(
+            status_code=410,
+            detail="Game session is closed",
+        )
+
+    if accepted is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Game session not found",
+        )
+
+    return {
+        "status": "accepted",
     }

@@ -23,6 +23,11 @@ class Game(Base):
         nullable=False,
         default=list,
     )
+    outgoing_shots: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

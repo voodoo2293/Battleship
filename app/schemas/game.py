@@ -14,3 +14,12 @@ class OpponentShotRequest(BaseModel):
 
 class OpponentShotResponse(BaseModel):
     result: Literal["miss", "hit", "killed"]
+
+class ShotResponse(BaseModel):
+    coordinate: str
+
+class ShotResultRequest(BaseModel):
+    result: str
+
+class ShotResultResponse(BaseModel):
+    status: Literal["accepted"]
