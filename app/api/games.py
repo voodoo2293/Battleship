@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.game import (
+    CloseGameResponse,
     GameCreateResponse,
     OpponentShotRequest,
     OpponentShotResponse,
@@ -13,9 +14,11 @@ from app.schemas.game import (
     ShotResultResponse,
 )
 from app.services.game import (
+    GameAlreadyClosedError,
     GameClosedError,
     NoPendingShotError,
     ShotPendingError,
+    close_game,
     create_game as create_game_service,
     create_shot,
     process_opponent_shot,
@@ -153,4 +156,33 @@ def shot_result(
 
     return {
         "status": "accepted",
+    }
+
+@router.post(
+    "/{session_id}/close",
+    response_model=CloseGameResponse,
+)
+def close_game_endpoint(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+):
+    try:
+        closed = close_game(
+            db=db,
+            session_id=session_id,
+        )
+    except GameAlreadyClosedError:
+        raise HTTPException(
+            status_code=400,
+            detail="Game session is already closed",
+        )
+
+    if closed is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Game session not found",
+        )
+
+    return {
+        "status": "closed",
     }

@@ -2,8 +2,10 @@ from app.db.session import SessionLocal
 from app.domain.fleet.validator import is_valid_fleet
 from app.models.game import Game
 from app.services.game import (
+    GameAlreadyClosedError,
     NoPendingShotError,
     ShotPendingError,
+    close_game,
     create_game,
     create_shot,
     process_opponent_shot,
@@ -409,6 +411,92 @@ def test_create_shot_targets_neighbor_after_hit():
         assert first_coordinate == "A1"
         assert second_coordinate in {"A2", "B1"}
         assert second_coordinate != first_coordinate
+
+    finally:
+        saved_game = db.get(Game, session_id)
+
+        if saved_game is not None:
+            db.delete(saved_game)
+            db.commit()
+
+        db.close()
+
+def test_close_game_persists_closed_status():
+    db = SessionLocal()
+
+    game = Game(
+        ships=[
+            {"coordinates": ["A1"]},
+        ]
+    )
+
+    try:
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+
+        session_id = game.session_id
+
+        result = close_game(
+            db=db,
+            session_id=session_id,
+        )
+
+        assert result is True
+
+    finally:
+        db.close()
+
+    db = SessionLocal()
+
+    try:
+        saved_game = db.get(Game, session_id)
+
+        assert saved_game is not None
+        assert saved_game.status == "closed"
+
+    finally:
+        saved_game = db.get(Game, session_id)
+
+        if saved_game is not None:
+            db.delete(saved_game)
+            db.commit()
+
+        db.close()
+
+def test_close_game_rejects_repeated_close():
+    db = SessionLocal()
+
+    game = Game(
+        ships=[
+            {"coordinates": ["A1"]},
+        ]
+    )
+
+    try:
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+
+        session_id = game.session_id
+
+        first_result = close_game(
+            db=db,
+            session_id=session_id,
+        )
+
+        assert first_result is True
+
+        try:
+            close_game(
+                db=db,
+                session_id=session_id,
+            )
+
+            assert False, "GameAlreadyClosedError was not raised"
+
+        except GameAlreadyClosedError:
+            pass
 
     finally:
         saved_game = db.get(Game, session_id)

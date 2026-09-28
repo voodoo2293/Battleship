@@ -9,6 +9,9 @@ from app.models.game import Game
 class GameClosedError(Exception):
     pass
 
+class GameAlreadyClosedError(Exception):
+    pass
+
 class ShotPendingError(Exception):
     pass
 
@@ -122,6 +125,24 @@ def process_shot_result(
     ]
 
     game.outgoing_shots = updated_shots
+
+    db.commit()
+
+    return True
+
+def close_game(
+    db: Session,
+    session_id: UUID,
+) -> bool | None:
+    game = db.get(Game, session_id)
+
+    if game is None:
+        return None
+
+    if game.status == "closed":
+        raise GameAlreadyClosedError
+
+    game.status = "closed"
 
     db.commit()
 
