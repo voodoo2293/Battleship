@@ -519,7 +519,7 @@ def test_shot_result_returns_410_for_close_session():
         ships=[
             {"coordinates": ["J10"]},
         ],
-        status="close",
+        status="closed",
     )
 
     try:
@@ -658,3 +658,71 @@ def test_shot_returns_to_search_after_killed():
 
     finally:
         delete_game(session_id)
+
+def test_close_game_returns_closed_and_persists_status():
+    response = client.post("/game")
+    data = response.json()
+
+    try:
+        session_id = data["session_id"]
+
+        close_response = client.post(
+            f"/game/{session_id}/close"
+        )
+
+        assert close_response.status_code == 200
+        assert close_response.json() == {
+            "status": "closed",
+        }
+
+        db = SessionLocal()
+
+        try:
+            saved_game = db.get(Game, UUID(session_id))
+
+            assert saved_game is not None
+            assert saved_game.status == "closed"
+        finally:
+            db.close()
+
+    finally:
+        if "session_id" in data:
+            delete_game(data["session_id"])
+
+def test_close_game_returns_400_when_already_closed():
+    response = client.post("/game")
+    data = response.json()
+
+    try:
+        session_id = data["session_id"]
+
+        first_response = client.post(
+            f"/game/{session_id}/close"
+        )
+
+        second_response = client.post(
+            f"/game/{session_id}/close"
+        )
+
+        assert first_response.status_code == 200
+
+        assert second_response.status_code == 400
+        assert second_response.json() == {
+            "detail": "Game session is already closed",
+        }
+
+    finally:
+        if "session_id" in data:
+            delete_game(data["session_id"])
+
+def test_close_game_returns_404_for_unknown_session():
+    session_id = uuid4()
+
+    response = client.post(
+        f"/game/{session_id}/close"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Game session not found",
+    }
