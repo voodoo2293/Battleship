@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
 from uuid import UUID
+from threading import Barrier
 
 from fastapi.testclient import TestClient
 
@@ -307,3 +308,289 @@ def test_parallel_requests_finish_under_one_second():
     finally:
         for session_id in session_ids:
             delete_game(session_id)
+
+def test_parallel_close_same_session_allows_only_one_success():
+    response = client.post("/game")
+
+    assert response.status_code == 201
+
+    session_id = response.json()["session_id"]
+
+    barrier = Barrier(2)
+
+    def close_session():
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/close"
+        )
+
+        return response.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(close_session)
+                for _ in range(2)
+            ]
+
+            status_codes = [
+                future.result()
+                for future in futures
+            ]
+
+        assert sorted(status_codes) == [200, 400]
+
+        db = SessionLocal()
+
+        try:
+            game = db.get(
+                Game,
+                UUID(session_id),
+            )
+
+            assert game is not None
+            assert game.status == "closed"
+
+        finally:
+            db.close()
+
+    finally:
+        delete_game(session_id)
+
+def test_parallel_shot_same_session_allows_only_one_pending_shot():
+    response = client.post("/game")
+
+    assert response.status_code == 201
+
+    session_id = response.json()["session_id"]
+
+    barrier = Barrier(2)
+
+    def make_shot():
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/shot"
+        )
+
+        return response.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(make_shot)
+                for _ in range(2)
+            ]
+
+            status_codes = [
+                future.result()
+                for future in futures
+            ]
+
+        assert sorted(status_codes) == [200, 409]
+
+        db = SessionLocal()
+
+        try:
+            game = db.get(
+                Game,
+                UUID(session_id),
+            )
+
+            assert game is not None
+            assert game.outgoing_shots == [
+                {
+                    "coordinate": "A1",
+                    "result": None,
+                }
+            ]
+
+        finally:
+            db.close()
+
+    finally:
+        delete_game(session_id)
+
+def test_parallel_shot_result_same_session_allows_only_one_result():
+    response = client.post("/game")
+
+    assert response.status_code == 201
+
+    session_id = response.json()["session_id"]
+
+    shot_response = client.post(
+        f"/game/{session_id}/shot"
+    )
+
+    assert shot_response.status_code == 200
+
+    barrier = Barrier(2)
+
+    def send_result(result):
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/shot/result",
+            json={"result": result},
+        )
+
+        return response.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(send_result, "hit"),
+                executor.submit(send_result, "miss"),
+            ]
+
+            status_codes = [
+                future.result()
+                for future in futures
+            ]
+
+        assert sorted(status_codes) == [200, 409]
+
+        db = SessionLocal()
+
+        try:
+            game = db.get(
+                Game,
+                UUID(session_id),
+            )
+
+            assert game is not None
+            assert len(game.outgoing_shots) == 1
+            assert game.outgoing_shots[0]["coordinate"] == "A1"
+            assert game.outgoing_shots[0]["result"] in {
+                "hit",
+                "miss",
+            }
+
+        finally:
+            db.close()
+
+    finally:
+        delete_game(session_id)
+
+def test_parallel_opponent_shots_same_session_keep_both_shots():
+    response = client.post("/game")
+
+    assert response.status_code == 201
+
+    session_id = response.json()["session_id"]
+
+    barrier = Barrier(2)
+
+    def send_shot(coordinate):
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/opponent-shot",
+            json={"coordinate": coordinate},
+        )
+
+        return response.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(send_shot, "A1"),
+                executor.submit(send_shot, "J10"),
+            ]
+
+            status_codes = [
+                future.result()
+                for future in futures
+            ]
+
+        assert status_codes == [200, 200]
+
+        db = SessionLocal()
+
+        try:
+            game = db.get(
+                Game,
+                UUID(session_id),
+            )
+
+            assert game is not None
+            assert sorted(game.received_shots) == [
+                "A1",
+                "J10",
+            ]
+
+        finally:
+            db.close()
+
+    finally:
+        delete_game(session_id)
+
+def test_parallel_close_and_shot_same_session_keep_state_consistent():
+    response = client.post("/game")
+    
+    assert response.status_code == 201
+
+    session_id = response.json()["session_id"]
+
+    barrier = Barrier(2)
+
+    def close_session():
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/close"
+        )
+
+        return "close", response.status_code
+
+    def make_shot():
+        barrier.wait()
+
+        response = client.post(
+            f"/game/{session_id}/shot"
+        )
+
+        return "shot", response.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(close_session),
+                executor.submit(make_shot),
+            ]
+
+            results = dict(
+                future.result()
+                for future in futures
+            )
+
+        assert results["close"] == 200
+        assert results["shot"] in {200, 410}
+
+        db = SessionLocal()
+
+        try:
+            game = db.get(
+                Game,
+                UUID(session_id),
+            )
+
+            assert game is not None
+            assert game.status == "closed"
+
+            if results["shot"] == 200:
+                assert game.outgoing_shots == [
+                    {
+                        "coordinate": "A1",
+                        "result": None,
+                    }
+                ]
+            else:
+                assert game.outgoing_shots == []
+
+        finally:
+            db.close()
+
+    finally:
+        delete_game(session_id)
