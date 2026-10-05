@@ -1,12 +1,16 @@
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select, update
 
 from app.domain.fleet.generator import generate_fleet
 from app.domain.shots import choose_shot_coordinate, get_shot_result
 from app.models.game import Game
 
 class GameClosedError(Exception):
+    pass
+
+class GameAlreadyClosedError(Exception):
     pass
 
 class ShotPendingError(Exception):
@@ -36,7 +40,11 @@ def process_opponent_shot(
     session_id: UUID,
     coordinate: str,
 ) -> str | None:
-    game = db.get(Game, session_id)
+    game = db.execute(
+        select(Game)
+        .where(Game.session_id == session_id)
+        .with_for_update()
+    ).scalar_one_or_none()
 
     if game is None:
         return None
@@ -63,7 +71,11 @@ def create_shot(
     db: Session,
     session_id: UUID,
 ) -> str | None:
-    game = db.get(Game, session_id)
+    game = db.execute(
+        select(Game)
+        .where(Game.session_id == session_id)
+        .with_for_update()
+    ).scalar_one_or_none()
 
     if game is None:
         return None
@@ -99,7 +111,11 @@ def process_shot_result(
     session_id: UUID,
     result: str,
 ) -> bool | None:
-    game = db.get(Game, session_id)
+    game = db.execute(
+        select(Game)
+        .where(Game.session_id == session_id)
+        .with_for_update()
+    ).scalar_one_or_none()
 
     if game is None:
         return None
@@ -126,3 +142,31 @@ def process_shot_result(
     db.commit()
 
     return True
+
+def close_game(
+        db: Session,
+        session_id: UUID,
+) -> bool | None:
+    statement = (
+        update(Game)
+        .where(
+            Game.session_id == session_id,
+            Game.status == "active",
+        )
+        .values(status="closed")
+    )
+
+    result = db.execute(statement)
+
+    if result.rowcount == 1:
+        db.commit()
+        return True
+
+    db.rollback()
+
+    game = db.get(Game, session_id)
+
+    if game is None:
+        return None
+
+    raise GameAlreadyClosedError
