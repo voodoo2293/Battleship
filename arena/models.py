@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ServiceConfig:
@@ -12,10 +12,21 @@ class GameSession:
     ships: list[list[str]]
 
 @dataclass
+class ShotRecord:
+    player: str
+    coordinate: str
+    expected: str
+    reported: str
+@dataclass
 class MatchResult:
     winner: ServiceConfig
     loser: ServiceConfig
     turns: int
+    technical:bool = False
+    reason: str | None = None
+    shots: list[ShotRecord] = field(
+        default_factory=list
+    )
 
 @dataclass
 class TournamentResult:

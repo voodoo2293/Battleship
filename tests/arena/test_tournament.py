@@ -114,4 +114,83 @@ def test_play_tournament_returns_all_winners_on_tie(monkeypatch):
         "B",
         "C",
     ]
-    
+
+def test_tournament_continues_after_technical_defeat(
+        monkeypatch,
+):
+    service_a = ServiceConfig(
+        "A",
+        "http://service-a",
+    )
+    service_b = ServiceConfig(
+        "B",
+        "http://service-b",
+    )
+    service_c = ServiceConfig(
+        "C",
+        "http://service-c",
+    )
+
+    results = [
+        MatchResult(
+            winner=service_b,
+            loser=service_a,
+            turns=0,
+            technical=True,
+            reason="A unavailable",
+        ),
+        MatchResult(
+            winner=service_c,
+            loser=service_a,
+            turns=20,
+        ),
+        MatchResult(
+            winner=service_c,
+            loser=service_b,
+            turns=30,
+        ),
+    ]
+
+    calls = []
+
+    def fake_play_match(
+            first_service,
+            second_service,
+    ):
+        calls.append(
+            (
+                first_service.name,
+                second_service.name,
+            )
+        )
+
+        return results[len(calls) - 1]
+
+    monkeypatch.setattr(
+        "arena.tournament.play_match",
+        fake_play_match,
+    )
+
+    result = play_tournament(
+        [
+            service_a,
+            service_b,
+            service_c,
+        ]
+    )
+
+    assert calls == [
+        ("A", "B"),
+        ("A", "C"),
+        ("B", "C"),
+    ]
+
+    assert result.scores == {
+        "A": 0,
+        "B": 1,
+        "C": 2,
+    }
+
+    assert result.winners == [
+        service_c,
+    ]
