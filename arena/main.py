@@ -2,7 +2,6 @@ import argparse
 
 from arena.models import ServiceConfig
 from arena.tournament import play_tournament
-from arena.report import save_tournament_report
 
 def main():
     parser = argparse.ArgumentParser(
@@ -38,9 +37,12 @@ def main():
         )
     ]
 
-    result = play_tournament(services)
+    result = play_tournament(
+        services,
+        report_path="reports/tournament.json",
+    )
 
-    report_path = save_tournament_report(result)
+    report_path = "reports/tournament.json"
 
     print("\nMatches:")
 
@@ -56,10 +58,23 @@ def main():
     for name, score in result.scores.items():
         print(f"{name}: {score}")
 
-    print("\nWinner:")
+    if result.completed:
+        print("\nWinner:")
 
-    for winner in result.winners:
-        print(winner.name)
+        for winner in result.winners:
+            print(winner.name)
+    else:
+        print(
+            "\nTournament incomplete: "
+            "some matches failed due to arena error."
+        )
+
+        for failure in result.failed_matches:
+            print(
+                f"{failure.first_service.name} vs "
+                f"{failure.second_service.name}: "
+                f"{failure.reason}"
+            )
 
     print(f"\nReport saved: {report_path}")
 

@@ -25,6 +25,15 @@ from arena.match import (
 
 from arena.models import ServiceConfig, GameSession
 
+@pytest.fixture(autouse=True)
+def start_existing_tests_with_first_service(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "arena.match.random.choice",
+        lambda sessions: sessions[0],
+    )
+
 def test_create_game_session_build_internal_model(monkeypatch):
     service = ServiceConfig(
         "A",
@@ -32,7 +41,7 @@ def test_create_game_session_build_internal_model(monkeypatch):
     )
 
     fake_response = {
-        "session_id": "session-a",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
         "ships": [
             {"coordinates": ["A1", "A2", "A3", "A4"]},
             {"coordinates": ["D1", "E1", "F1"]},
@@ -58,7 +67,7 @@ def test_create_game_session_build_internal_model(monkeypatch):
     session = create_game_session(service)
 
     assert session.service == service
-    assert session.session_id == "session-a"
+    assert session.session_id == "550e8400-e29b-41d4-a716-446655440000"
     assert session.ships == [
         ["A1", "A2", "A3", "A4"],
         ["D1", "E1", "F1"],
@@ -294,7 +303,7 @@ def test_create_game_session_rejects_invalid_fleet(monkeypatch):
     )
 
     fake_response = {
-        "session_id": "session-a",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
         "ships": [
             {
                 "coordinates": ["A1"],
@@ -1331,7 +1340,7 @@ def test_create_game_session_rejects_invalid_response(
 
     def fake_create_game(self):
         return {
-            "session_id": "session-a",
+            "session_id": "550e8400-e29b-41d4-a716-446655440000",
             "ships": "wrong",
         }
 
@@ -1730,3 +1739,116 @@ def test_creation_error_survives_cleanup_failure(
     assert result.turns == 0
     assert "timeout" in result.reason
     assert close_calls == ["session-a"]
+
+@pytest.mark.parametrize(
+    "session_id",
+    [
+        "",
+        "../",
+        "a/b",
+        "a b",
+        "a?b",
+    ],
+)
+def test_create_game_session_rejects_invalid_session_id(
+    monkeypatch,
+    session_id,
+):
+    service = ServiceConfig(
+        "A",
+        "http://service-a",
+    )
+
+    def fake_create_game(self):
+        return {
+            "session_id": session_id,
+            "ships": [],
+        }
+
+    monkeypatch.setattr(
+        "arena.match.ArenaClient.create_game",
+        fake_create_game,
+    )
+
+    with pytest.raises(
+        ServiceResponseError,
+        match="invalid game creation response",
+    ):
+        create_game_session(service)
+
+def test_play_match_can_start_with_second_service(
+        monkeypatch,
+):
+    service_a = ServiceConfig(
+        "A",
+        "http://service-a",
+    )
+    service_b = ServiceConfig(
+        "B",
+        "http://service-b",
+    )
+
+    session_a = GameSession(
+        service=service_a,
+        session_id="session-a",
+        ships=[
+            ["A1"],
+        ],
+    )
+    session_b = GameSession(
+        service=service_b,
+        session_id="session-b",
+        ships=[
+            ["B1"],
+        ],
+    )
+
+    def fake_create_match_sessions(
+            first_service,
+            second_service,
+    ):
+        return session_a, session_b
+
+    def fake_play_turn(
+            shooter,
+            opponent,
+            opponent_hits,
+            shooter_shots,
+    ):
+        assert shooter is session_b
+        assert opponent is session_a
+
+        return "A1", "killed"
+
+    def fake_close_match_sessions(
+            first_session,
+            second_session,
+    ):
+        return None, None
+
+    monkeypatch.setattr(
+        "arena.match.create_match_sessions",
+        fake_create_match_sessions,
+    )
+    monkeypatch.setattr(
+        "arena.match.play_turn",
+        fake_play_turn,
+    )
+    monkeypatch.setattr(
+        "arena.match.close_match_sessions",
+        fake_close_match_sessions,
+    )
+    monkeypatch.setattr(
+        "arena.match.random.choice",
+        lambda sessions: sessions[1],
+    )
+
+    result = play_match(
+        service_a,
+        service_b,
+    )
+
+    assert result.winner == service_b
+    assert result.loser == service_a
+    assert result.turns == 1
+    assert result.technical is False

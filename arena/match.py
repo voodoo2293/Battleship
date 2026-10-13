@@ -1,6 +1,7 @@
 import httpx
-
 import logging
+import random
+from uuid import UUID
 
 from arena.client import ArenaClient
 from arena.models import (
@@ -55,6 +56,20 @@ def create_game_session(
         or not isinstance(response.get("session_id"), str)
         or not isinstance(response.get("ships"), list)
     ):
+        raise ServiceResponseError(
+            service,
+            "invalid game creation response",
+        )
+
+    try:
+        parsed_session_id = UUID(response["session_id"])
+    except ValueError:
+        raise ServiceResponseError(
+            service,
+            "invalid game creation response",
+        )
+
+    if str(parsed_session_id) != response["session_id"].lower():
         raise ServiceResponseError(
             service,
             "invalid game creation response",
@@ -339,30 +354,39 @@ def play_match(
         )
 
     hits = {
-        first_session.session_id: set(),
-        second_session.session_id: set(),
+        first_session.service: set(),
+        second_session.service: set(),
     }
 
     shots = {
-        first_session.session_id: set(),
-        second_session.session_id: set(),
+        first_session.service: set(),
+        second_session.service: set(),
     }
 
     shot_records = []
 
     fleet_cells = {
-        first_session.session_id: sum(
+        first_session.service: sum(
             len(ship)
             for ship in first_session.ships
         ),
-        second_session.session_id: sum(
+        second_session.service: sum(
             len(ship)
             for ship in second_session.ships
         ),
     }
 
-    shooter = first_session
-    opponent = second_session
+    shooter = random.choice(
+        (
+            first_session,
+            second_session,
+        )
+    )
+    opponent = (
+        second_session
+        if shooter is first_session
+        else first_session
+    )
     turns = 0
 
     try:
@@ -370,13 +394,13 @@ def play_match(
             coordinate, result = play_turn(
                 shooter,
                 opponent,
-                hits[opponent.session_id],
-                shots[shooter.session_id],
+                hits[opponent.service],
+                shots[shooter.service],
             )
 
             expected_result = get_expected_shot_result(
                 opponent.ships,
-                hits[opponent.session_id],
+                hits[opponent.service],
                 coordinate,
             )
 
@@ -392,13 +416,13 @@ def play_match(
             turns += 1
 
             if result in {"hit", "killed"}:
-                hits[opponent.session_id].add(
+                hits[opponent.service].add(
                     coordinate
                 )
 
                 if (
-                    len(hits[opponent.session_id])
-                    == fleet_cells[opponent.session_id]
+                    len(hits[opponent.service])
+                    == fleet_cells[opponent.service]
                 ):
                     return MatchResult(
                         winner=shooter.service,

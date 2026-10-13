@@ -27,9 +27,18 @@ class MatchResult:
     shots: list[ShotRecord] = field(
         default_factory=list
     )
+@dataclass
+class FailedMatch:
+    first_service: ServiceConfig
+    second_service: ServiceConfig
+    reason: str
 
 @dataclass
 class TournamentResult:
     matches: list[MatchResult]
     scores: dict[str, int]
     winners: list[ServiceConfig]
+    failed_matches: list[FailedMatch] = field(
+        default_factory=list
+    )
+    completed: bool = True
