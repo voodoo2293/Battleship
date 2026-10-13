@@ -1,8 +1,13 @@
 BOARD_SIZE = 10
 BOARD_COLUMNS = "ABCDEFGHIJ"
 
-def parse_coordinate(coordinate: str) -> tuple[int, int]:
-    if len(coordinate) < 2:
+def parse_coordinate(
+        coordinate: str,
+) -> tuple[int, int]:
+    if not isinstance(coordinate, str):
+        raise ValueError("Invalid coordinate")
+
+    if not 2 <= len(coordinate) <= 3:
         raise ValueError("Invalid coordinate")
 
     column = coordinate[0]
@@ -11,18 +16,16 @@ def parse_coordinate(coordinate: str) -> tuple[int, int]:
     if column not in BOARD_COLUMNS:
         raise ValueError("Invalid coordinate")
 
-    if not row.isdigit():
+    if row not in (
+        "1", "2", "3", "4", "5",
+        "6", "7", "8", "9", "10"
+    ):
         raise ValueError("Invalid coordinate")
 
-    if row.startswith("0"):
-        raise ValueError("Invalid coordinate")
+    x = BOARD_COLUMNS.index(column)
+    y = int(row) - 1
 
-    row_number = int(row)
-
-    if not 1 <= row_number <= BOARD_SIZE:
-        raise ValueError("Invalid coordinate")
-
-    return ord(column) - ord("A"), row_number - 1
+    return x, y
 
 def is_inside_board(position: tuple[int, int]) -> bool:
     x, y = position
